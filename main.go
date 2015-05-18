@@ -29,10 +29,12 @@ func (t *tunnel) Prepare(raw ...interface{}) error {
 	if t.Exec == "" {
 		return errors.New("missing exec")
 	}
-	t.Exec, err = exec.LookPath(t.Exec)
+	var texec string
+	texec, err = exec.LookPath(t.Exec)
 	if err != nil {
-		return errors.New("executable " + t.Exec + " not found")
+		return fmt.Errorf("executable %q not found: %v", t.Exec, err)
 	}
+	t.Exec = texec
 
 	t.server, err = newSSHServer()
 	if err != nil {

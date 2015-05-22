@@ -3,7 +3,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -17,18 +16,47 @@ import (
 )
 
 type tunnel struct {
-	Exec string
-	Args []string
+	common.PackerConfig `mapstructure:",squash"`
+
+	Exec string   `mapstructure:"exec"`
+	Args []string `mapstructure:"args"`
+
+	tpl *packer.ConfigTemplate
 
 	server *sshServer
 }
 
 func (t *tunnel) Prepare(raw ...interface{}) error {
-	var err error
-	_, err = common.DecodeConfig(t, raw...)
-	if t.Exec == "" {
-		return errors.New("missing exec")
+	md, err := common.DecodeConfig(t, raw...)
+	if err != nil {
+		return err
 	}
+	errs := common.CheckUnusedConfig(md)
+	t.tpl, err = packer.NewConfigTemplate()
+	if err != nil {
+		return err
+	}
+	t.tpl.UserVars = t.PackerUserVars
+
+	t.Exec, err = t.tpl.Process(t.Exec, nil)
+	if err != nil {
+		errs = packer.MultiErrorAppend(errs, fmt.Errorf("error processing exec template: %s", err))
+	}
+	if t.Exec == "" {
+		errs = packer.MultiErrorAppend(errs, fmt.Errorf("missing tunnel provisioner parameter exec"))
+	}
+
+	for i, arg := range t.Args {
+		t.Args[i], err = t.tpl.Process(arg, nil)
+		if err != nil {
+			errs = packer.MultiErrorAppend(errs, fmt.Errorf("error processing arg %d (%q): %s", i, arg, err))
+		}
+	}
+
+	if errs != nil && len(errs.Errors) > 0 {
+		return errs
+	}
+
 	var texec string
 	texec, err = exec.LookPath(t.Exec)
 	if err != nil {

@@ -66,8 +66,6 @@ set :disable_sudo, true
 
 ### Limitations
 
-The tunnel does not (yet) support Packer templates. This is not a fundamental limitation; they're just not implemented yet.
-
 The tunnel supports only a limited subset of SSH. In particular, it does not provide a shell or a pty. That means that you cannot use "ssh" as your external tool, and you cannot use interactive commands, most notably sudo. As far as I can tell, this is a fundamental limitation. Packer does not actually expose an SSH connection to its provisioner plugins, among other reasons because it does not always have one. The tunnel thus emulates an SSH backend that knows only how to execute commands.
 
 
@@ -76,5 +74,3 @@ The tunnel supports only a limited subset of SSH. In particular, it does not pro
 * There's not much by way of comments and docs. This is because I don't know yet whether this is throw-away code.
 
 * I'm genuinely unsure how to write reasonable tests for this that aren't significant more complicated and fragile than the code being tested.
-
-* Support Packer templates.

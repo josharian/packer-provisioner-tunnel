@@ -11,8 +11,10 @@ import (
 	"strings"
 
 	"github.com/mitchellh/packer/common"
+	"github.com/mitchellh/packer/helper/config"
 	"github.com/mitchellh/packer/packer"
 	"github.com/mitchellh/packer/packer/plugin"
+	"github.com/mitchellh/packer/template/interpolate"
 )
 
 type tunnel struct {
@@ -21,33 +23,28 @@ type tunnel struct {
 	Exec string   `mapstructure:"exec"`
 	Args []string `mapstructure:"args"`
 
-	tpl *packer.ConfigTemplate
-
 	server *sshServer
 }
 
 func (t *tunnel) Prepare(raw ...interface{}) error {
-	md, err := common.DecodeConfig(t, raw...)
-	if err != nil {
-		return err
-	}
-	errs := common.CheckUnusedConfig(md)
-	t.tpl, err = packer.NewConfigTemplate()
-	if err != nil {
-		return err
-	}
-	t.tpl.UserVars = t.PackerUserVars
+	var errs *packer.MultiError
 
-	t.Exec, err = t.tpl.Process(t.Exec, nil)
+	err := config.Decode(t, nil, raw...)
 	if err != nil {
-		errs = packer.MultiErrorAppend(errs, fmt.Errorf("error processing exec template: %s", err))
+		return err
 	}
+
 	if t.Exec == "" {
 		errs = packer.MultiErrorAppend(errs, fmt.Errorf("missing tunnel provisioner parameter exec"))
 	}
 
+	t.Exec, err = interpolate.Render(t.Exec, nil)
+	if err != nil {
+		errs = packer.MultiErrorAppend(errs, fmt.Errorf("error processing exec template: %s", err))
+	}
+
 	for i, arg := range t.Args {
-		t.Args[i], err = t.tpl.Process(arg, nil)
+		t.Args[i], err = interpolate.Render(arg, nil)
 		if err != nil {
 			errs = packer.MultiErrorAppend(errs, fmt.Errorf("error processing arg %d (%q): %s", i, arg, err))
 		}

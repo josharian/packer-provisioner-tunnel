@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -68,6 +69,30 @@ func (t *tunnel) Prepare(raw ...interface{}) error {
 	return nil
 }
 
+type lineWriter struct {
+	output func(string)
+	buffer []byte
+}
+
+func (w *lineWriter) Write(b []byte) (int, error) {
+	w.buffer = append(w.buffer, b...)
+
+	for {
+		i := bytes.IndexByte(w.buffer, '\n')
+		if i == -1 {
+			break
+		}
+		w.output(string(w.buffer[:i]))
+		w.buffer = w.buffer[i+1:]
+	}
+
+	return len(b), nil
+}
+
+func (w *lineWriter) Flush() {
+	w.output(string(w.buffer))
+}
+
 func (t *tunnel) Provision(ui packer.Ui, comm packer.Communicator) error {
 	ui.Say("Starting tunnel")
 	t.server.comm = comm
@@ -76,19 +101,27 @@ func (t *tunnel) Provision(ui packer.Ui, comm packer.Communicator) error {
 		errc <- t.server.serveOne()
 	}()
 
+	stdout := &lineWriter{output: ui.Say}
+	stderr := &lineWriter{output: ui.Error}
+
 	cmd := exec.Command(t.Exec, t.Args...)
 	cmd.Env = append(os.Environ(),
 		"PACKER_TUNNEL_USERNAME="+t.server.username,
 		"PACKER_TUNNEL_PASSWORD="+t.server.password,
 		"PACKER_TUNNEL_PORT="+strconv.Itoa(t.server.port),
 	)
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+
 	log.Println("Command", cmd.Args, "env", cmd.Env)
 
 	ui.Say("Running command " + strings.Join(cmd.Args, " "))
-	out, err := cmd.CombinedOutput()
-	ui.Say(string(out))
+
+	err := cmd.Run()
+	stdout.Flush()
+	stderr.Flush()
 	if err != nil {
-		ui.Say(fmt.Sprintf("Error running command %s", err))
+		ui.Error(fmt.Sprintf("Error running command %s", err))
 		return err
 	}
 

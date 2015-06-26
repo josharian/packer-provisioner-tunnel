@@ -90,7 +90,9 @@ func (w *lineWriter) Write(b []byte) (int, error) {
 }
 
 func (w *lineWriter) Flush() {
-	w.output(string(w.buffer))
+	if len(w.buffer) > 0 {
+		w.output(string(w.buffer))
+	}
 }
 
 func (t *tunnel) Provision(ui packer.Ui, comm packer.Communicator) error {
